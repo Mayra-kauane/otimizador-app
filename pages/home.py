@@ -3,7 +3,6 @@ from datetime import datetime
 import streamlit as st
 
 from components.widgets import small_metric_card, status_badge
-from core.constants import PAGE_OPTIONS
 from core.db import delete_analise, fetch_analise_by_id, fetch_analises
 
 
@@ -67,9 +66,6 @@ def view_report_dialog(analise_id: int):
 
 
 def _go_to_upload():
-    label_by_key = {key: label for label, key in PAGE_OPTIONS}
-    st.session_state["page"] = "upload"
-    st.session_state["sidebar_nav"] = label_by_key["upload"]
     st.session_state["pending_nav"] = "upload"
     st.rerun()
 
