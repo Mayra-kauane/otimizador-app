@@ -77,15 +77,10 @@ def render_sidebar(current_key: str, page_options: list[tuple[str, str]]) -> str
     )
 
     default_label = label_by_key[current_key]
-    if "sidebar_nav" not in st.session_state:
-        st.session_state["sidebar_nav"] = default_label
-    elif st.session_state["sidebar_nav"] not in labels:
-        st.session_state["sidebar_nav"] = default_label
-
     selected_label = st.sidebar.radio(
         "Ir para",
         labels,
-        key="sidebar_nav",
+        index=labels.index(default_label),
         label_visibility="collapsed",
     )
     return key_by_label[selected_label]

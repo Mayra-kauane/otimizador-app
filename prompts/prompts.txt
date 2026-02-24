@@ -1,0 +1,10 @@
+# System prompt principal
+
+[Preencha aqui o prompt de sistema principal usado no projeto]
+
+# Outros prompts usados (few-shot examples, templates, etc.)
+
+- [Exemplo few-shot 1]
+- [Exemplo few-shot 2]
+- [Template de prompt para analise de curriculo]
+- [Template de prompt para comparacao com vaga]

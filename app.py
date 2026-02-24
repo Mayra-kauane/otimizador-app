@@ -26,8 +26,7 @@ def main():
         next_page = st.session_state.pop("pending_nav")
         if next_page in valid_keys:
             st.session_state["page"] = next_page
-            label_by_key = {key: label for label, key in PAGE_OPTIONS}
-            st.session_state["sidebar_nav"] = label_by_key[next_page]
+            st.rerun()
 
     previous_page = st.session_state.get("_previous_page", st.session_state["page"])
     selected_page = render_sidebar(st.session_state["page"], PAGE_OPTIONS)
