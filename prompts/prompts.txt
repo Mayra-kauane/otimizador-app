@@ -1,10 +1,64 @@
 # System prompt principal
 
-[Preencha aqui o prompt de sistema principal usado no projeto]
+Projeto sem LLM integrado nesta fase (apenas mocks), conforme regra da avaliacao.
+O agente de codificacao foi usado para gerar UI, estrutura, backend e documentacao.
 
 # Outros prompts usados (few-shot examples, templates, etc.)
 
-- [Exemplo few-shot 1]
-- [Exemplo few-shot 2]
-- [Template de prompt para analise de curriculo]
-- [Template de prompt para comparacao com vaga]
+## Prompts reais usados nesta entrega
+
+1) Prompt:
+"Eu quero fazer uma interface, e essa e minha ideia Plataforma de analise de curriculos que extrair informacoes e sugere melhorias por secao, que contenha upload de arqquivos parsing, interface de comparacao, relatorio"
+Resultado: parcial
+Motivo: ideia boa, mas faltou especificar stack e escopo tecnico detalhado.
+
+2) Prompt:
+"Eu quero fazer uma plataforma inteligente de analise e otimizacao de curriculos... faca isso no streamlit por favor"
+Resultado: funcionou
+Motivo: escopo completo com telas, campos e fluxo.
+
+3) Prompt:
+"Me ajude a gerar um readme de como usar a aplicacao..."
+Resultado: funcionou
+Motivo: objetivo claro de documentacao.
+
+4) Prompt:
+"adicione mais prompst os que funcionou e que nao funcionou que preciou de correcao"
+Resultado: funcionou
+Motivo: direcionou expansao da analise de prompts.
+
+5) Prompt:
+"eu preciso que vc pegue TODOS os prompst da nossa conversa..."
+Resultado: funcionou
+Motivo: requisito explicito de cobertura total e sem resumo.
+
+6) Prompt:
+"Adicione uma pasta de prompts no meu projeto..."
+Resultado: funcionou
+Motivo: tarefa objetiva de estrutura de arquivo.
+
+7) Prompt:
+"pq a minha aplicacao esta com duas navegacoes? Corrija isso..."
+Resultado: funcionou
+Motivo: problema especifico com acao tecnica clara.
+
+8) Prompt:
+"de tudo que fizemos, o que faltou pra esse projeto..."
+Resultado: funcionou
+Motivo: permitiu diagnostico por criterio de avaliacao.
+
+9) Prompt:
+"vc poderia me ajudar a fazer as coisas faltantes pedidas nesse criterio de avaliacao?"
+Resultado: funcionou
+Motivo: autorizou fechamento dos gaps da rubrica.
+
+## Templates de prompt recomendados para proximas iteracoes
+
+Template 1 - Implementacao de tela:
+"Implemente a tela [NOME] com [CAMPOS], [ACOES], [ESTADOS], usando dados mock e persistencia em SQLite."
+
+Template 2 - Ajuste de UX:
+"Remova [COMPORTAMENTO], mantenha [COMPORTAMENTO], sem alterar [REGRA]."
+
+Template 3 - Documentacao:
+"Atualize o README com [SECOES], incluindo o que funcionou, nao funcionou e proximos passos."

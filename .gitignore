@@ -1,0 +1,21 @@
+# Python / virtual env
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Streamlit / local configs
+.streamlit/secrets.toml
+
+# Database and local artifacts
+*.db
+*.sqlite
+*.sqlite3
+
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Node leftovers
+node_modules/
