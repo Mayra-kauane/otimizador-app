@@ -74,7 +74,7 @@ Acesso local:
 
 ## 5) Endpoint publico
 Link do endpoint publico:
-- `COLE_AQUI_O_LINK_PUBLICO`
+- `https://resume-ai-app-kc858pmaceu5fquaoomsdb.streamlit.app/`
 
 Checklist minimo para validacao em 1 minuto:
 - App abre sem erro.
