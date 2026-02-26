@@ -1,64 +1,32 @@
 # System prompt principal
 
-Projeto sem LLM integrado nesta fase (apenas mocks), conforme regra da avaliacao.
-O agente de codificacao foi usado para gerar UI, estrutura, backend e documentacao.
+Arquivo fonte:
+- `prompts/system_prompt.txt`
+
+Resumo do papel:
+- Avaliador tecnico de curriculos com foco ATS e aderencia a vaga.
+- Resposta obrigatoria em JSON estruturado.
+- Restricoes: nao inventar experiencia, explicitar incerteza, foco em acoes praticas.
 
 # Outros prompts usados (few-shot examples, templates, etc.)
 
-## Prompts reais usados nesta entrega
+Arquivos fonte:
+- `prompts/tool_selection_prompt.txt`
+- `prompts/final_response_prompt.txt`
 
-1) Prompt:
-"Eu quero fazer uma interface, e essa e minha ideia Plataforma de analise de curriculos que extrair informacoes e sugere melhorias por secao, que contenha upload de arqquivos parsing, interface de comparacao, relatorio"
-Resultado: parcial
-Motivo: ideia boa, mas faltou especificar stack e escopo tecnico detalhado.
+Prompts de template usados no desenvolvimento:
 
-2) Prompt:
-"Eu quero fazer uma plataforma inteligente de analise e otimizacao de curriculos... faca isso no streamlit por favor"
-Resultado: funcionou
-Motivo: escopo completo com telas, campos e fluxo.
+1) Planejamento de tools:
+"Tools disponiveis: ... Contexto: ... Responda SOMENTE JSON com tool_calls"
 
-3) Prompt:
-"Me ajude a gerar um readme de como usar a aplicacao..."
-Resultado: funcionou
-Motivo: objetivo claro de documentacao.
+2) Resposta final estruturada:
+"Use os resultados das tools para gerar JSON com: summary, ats_risk, strengths, weaknesses, section_rewrites, next_actions"
 
-4) Prompt:
-"adicione mais prompst os que funcionou e que nao funcionou que preciou de correcao"
-Resultado: funcionou
-Motivo: direcionou expansao da analise de prompts.
+3) Prompt de teste de robustez:
+"Retorne apenas JSON valido. Se faltar contexto, sinalize incerteza e proponha coleta de dados"
 
-5) Prompt:
-"eu preciso que vc pegue TODOS os prompst da nossa conversa..."
-Resultado: funcionou
-Motivo: requisito explicito de cobertura total e sem resumo.
+4) Prompt de comparacao parametrica:
+"Execute a mesma analise com temperature 0.3 e 0.7 e compare consistencia de formato"
 
-6) Prompt:
-"Adicione uma pasta de prompts no meu projeto..."
-Resultado: funcionou
-Motivo: tarefa objetiva de estrutura de arquivo.
-
-7) Prompt:
-"pq a minha aplicacao esta com duas navegacoes? Corrija isso..."
-Resultado: funcionou
-Motivo: problema especifico com acao tecnica clara.
-
-8) Prompt:
-"de tudo que fizemos, o que faltou pra esse projeto..."
-Resultado: funcionou
-Motivo: permitiu diagnostico por criterio de avaliacao.
-
-9) Prompt:
-"vc poderia me ajudar a fazer as coisas faltantes pedidas nesse criterio de avaliacao?"
-Resultado: funcionou
-Motivo: autorizou fechamento dos gaps da rubrica.
-
-## Templates de prompt recomendados para proximas iteracoes
-
-Template 1 - Implementacao de tela:
-"Implemente a tela [NOME] com [CAMPOS], [ACOES], [ESTADOS], usando dados mock e persistencia em SQLite."
-
-Template 2 - Ajuste de UX:
-"Remova [COMPORTAMENTO], mantenha [COMPORTAMENTO], sem alterar [REGRA]."
-
-Template 3 - Documentacao:
-"Atualize o README com [SECOES], incluindo o que funcionou, nao funcionou e proximos passos."
+5) Prompt de seguranca basica:
+"Nao inclua dados sensiveis nem inferencias pessoais fora do curriculo e vaga fornecidos"

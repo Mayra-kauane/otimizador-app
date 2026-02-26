@@ -1,10 +1,15 @@
-import json
-from io import BytesIO
-
 import streamlit as st
 
-from core.db import fetch_analise_by_id, fetch_analises
-from core.logic import make_report_text, score_from_metrics, section_metrics
+from agents.ollama_agent import OllamaConfig, run_resume_agent
+from components.llm_ui import render_rewrites, stringify_value
+from core.db import (
+    fetch_analise_ai_payload,
+    fetch_analise_artifacts,
+    fetch_analise_by_id,
+    fetch_analises,
+    update_analise_ai_payload,
+)
+from core.logic import score_from_metrics, section_metrics
 
 
 def _score_classification(score: int) -> tuple[str, str]:
@@ -19,7 +24,7 @@ def _priority_from_score(section_score: int) -> str:
     if section_score < 60:
         return "Alta"
     if section_score < 75:
-        return "Media"
+        return "Média"
     return "Baixa"
 
 
@@ -27,55 +32,8 @@ def _section_summary(metrics: dict) -> list[dict]:
     out = []
     for section_name, items in metrics.items():
         avg = int(sum(i[1] for i in items) / len(items)) if items else 0
-        out.append(
-            {
-                "section": section_name,
-                "score": avg,
-                "priority": _priority_from_score(avg),
-            }
-        )
+        out.append({"section": section_name, "score": avg, "priority": _priority_from_score(avg)})
     return out
-
-
-def _contextual_strengths(area: str) -> list[str]:
-    base = [
-        "Estrutura geral do curriculo favorece leitura rapida por recrutadores.",
-        "Perfil apresenta coerencia entre experiencia, habilidades e objetivo profissional.",
-    ]
-    if "dado" in area.lower():
-        base.append("Base tecnica com ferramentas relevantes para analise e BI.")
-    elif "market" in area.lower():
-        base.append("Boa aderencia a funcoes orientadas a performance e campanhas.")
-    elif "vend" in area.lower():
-        base.append("Historico com potencial para funis comerciais e negociacao.")
-    else:
-        base.append("Perfil apresenta base profissional consistente para evolucao.")
-    return base
-
-
-def _contextual_gaps(area: str) -> list[str]:
-    base = [
-        "Resumo profissional pode ser mais estrategico e orientado a resultados.",
-        "Experiencias podem incluir mais impacto mensuravel com numeros concretos.",
-    ]
-    if "dado" in area.lower():
-        base.append("Faltam evidencias de stack avancada e projetos com dados em escala.")
-    elif "market" in area.lower():
-        base.append("Faltam evidencias de metricas de negocio como CAC, LTV e ROI.")
-    elif "vend" in area.lower():
-        base.append("Falta detalhar metas batidas, ticket medio e ciclo de vendas.")
-    else:
-        base.append("Faltam exemplos de resultados diretamente conectados ao objetivo alvo.")
-    return base
-
-
-def _ai_generated_recommendations(area: str) -> list[str]:
-    return [
-        f"Reescrever resumo para tom mais profissional e foco em vagas de {area}.",
-        "Reformular bullets de experiencia com verbos fortes e resultados quantificados.",
-        "Adaptar habilidades e palavras-chave para a vaga alvo e filtros ATS.",
-        "Gerar versao alternativa do curriculo priorizando aderencia semantica a descricao da vaga.",
-    ]
 
 
 def _render_score_panel(score: int, semantic_fit: int | None):
@@ -90,10 +48,10 @@ def _render_score_panel(score: int, semantic_fit: int | None):
             padding:14px;
             margin-bottom:12px;
         ">
-            <div style="color:#93c5fd;font-size:12px;">Diagnostico consolidado</div>
+            <div style="color:#93c5fd;font-size:12px;">Diagnóstico consolidado</div>
             <div style="color:#f8fafc;font-size:34px;font-weight:800;line-height:1.1;">{score}%</div>
-            <div style="color:{color};font-weight:700;">Classificacao: {label}</div>
-            <div style="color:#cbd5e1;font-size:13px;margin-top:6px;">Fit semantico (mock IA): {semantic_text}</div>
+            <div style="color:{color};font-weight:700;">Classificação: {label}</div>
+            <div style="color:#cbd5e1;font-size:13px;margin-top:6px;">Fit semântico: {semantic_text}</div>
         </div>
         """,
         unsafe_allow_html=True,
@@ -102,7 +60,7 @@ def _render_score_panel(score: int, semantic_fit: int | None):
 
 
 def _render_section_panel(metrics: dict):
-    st.markdown("### Analise por secao")
+    st.markdown("### Análise por seção")
     for item in _section_summary(metrics):
         c1, c2, c3 = st.columns([2.2, 1.5, 1.3])
         with c1:
@@ -113,143 +71,143 @@ def _render_section_panel(metrics: dict):
             st.markdown(f"**{item['score']}%** | Prioridade: `{item['priority']}`")
 
 
-def _render_context_lists(area: str):
-    c1, c2 = st.columns(2)
-    with c1:
-        st.markdown("### Pontos fortes contextualizados")
-        st.success("\n".join(f"- {s}" for s in _contextual_strengths(area)))
-    with c2:
-        st.markdown("### Pontos de melhoria contextualizados")
-        st.warning("\n".join(f"- {g}" for g in _contextual_gaps(area)))
-
-
-def _render_ai_block(area: str):
-    st.markdown("### Recomendacoes Geradas por IA (mock)")
-    st.caption(
-        "Simulacao do ponto de integracao futuro com IA generativa para reescrita, adaptacao semantica e otimizacao ATS."
+def _build_config() -> OllamaConfig:
+    return OllamaConfig(
+        model=st.session_state.get("ollama_model", "llama3.1:8b"),
+        base_url=st.session_state.get("ollama_base_url", "http://localhost:11434"),
+        temperature=float(st.session_state.get("ollama_temperature", 0.3)),
+        top_p=float(st.session_state.get("ollama_top_p", 0.9)),
+        num_predict=int(st.session_state.get("ollama_num_predict", 700)),
     )
-    if st.button("Gerar recomendacoes inteligentes", type="primary"):
-        with st.spinner("Gerando recomendacoes de IA..."):
-            pass
-        st.session_state["report_ai_recs"] = _ai_generated_recommendations(area)
-
-    recs = st.session_state.get("report_ai_recs", [])
-    if recs:
-        st.info("\n".join(f"- {r}" for r in recs))
 
 
-def _render_version_compare(current_id: int | None):
-    st.markdown("### Comparacao entre versoes")
-    rows = fetch_analises()
-    if len(rows) < 2:
-        st.caption("Sao necessarias ao menos 2 analises para comparar versoes.")
+def _render_ai_block(selected: dict, metrics: dict, parsed: dict):
+    st.markdown("### Recomendações Geradas")
+    st.caption("As recomendações ficam salvas para este currículo.")
+
+    payload = fetch_analise_ai_payload(selected["id"], "report")
+    saved_result = payload.get("llm_result")
+    saved_desc = payload.get("job_description", "")
+
+    text_key = f"report_job_desc_{selected['id']}"
+    result_key = f"report_llm_result_{selected['id']}"
+    if saved_desc and text_key not in st.session_state:
+        st.session_state[text_key] = saved_desc
+    if saved_result and result_key not in st.session_state:
+        st.session_state[result_key] = saved_result
+
+    job_desc = st.text_area(
+        "Descrição da vaga para gerar recomendações finais",
+        key=text_key,
+        placeholder="Cole aqui a descrição da vaga para gerar recomendações reais.",
+    )
+
+    if st.button("Gerar recomendações", type="primary", key=f"report_btn_{selected['id']}"):
+        if not job_desc.strip():
+            st.warning("Cole a descrição da vaga para executar a IA.")
+        else:
+            skills = parsed.get("habilidades", [])
+            try:
+                with st.spinner("Pensando..."):
+                    llm_result = run_resume_agent(
+                        candidate_name=selected["candidato"],
+                        area=selected["area"],
+                        resume_skills=skills,
+                        section_metrics=metrics,
+                        job_title="Vaga alvo",
+                        job_description=job_desc,
+                        config=_build_config(),
+                    )
+                    st.session_state[result_key] = llm_result
+                    update_analise_ai_payload(
+                        selected["id"],
+                        "report",
+                        {"llm_result": llm_result, "job_description": job_desc},
+                    )
+            except Exception as exc:
+                st.error(f"Erro na execução com Ollama: {exc}")
+
+    llm_result = st.session_state.get(result_key)
+    if not llm_result:
         return
 
-    options = [{"id": r[0], "candidato": r[1], "score": r[4], "date": r[5]} for r in rows]
-    idx_new = 0
-    if current_id:
-        for i, o in enumerate(options):
-            if o["id"] == current_id:
-                idx_new = i
-                break
-
-    idx_old = 1 if len(options) > 1 else 0
-    old_v = st.selectbox(
-        "Versao base",
-        options,
-        index=idx_old,
-        key="report_old",
-        format_func=lambda o: f"#{o['id']} | {o['candidato']} | {o['date']} | {o['score']}%",
-    )
-    new_v = st.selectbox(
-        "Versao comparada",
-        options,
-        index=idx_new,
-        key="report_new",
-        format_func=lambda o: f"#{o['id']} | {o['candidato']} | {o['date']} | {o['score']}%",
-    )
-
-    delta = new_v["score"] - old_v["score"]
-    st.metric("Evolucao de score", f"{delta:+d} pontos")
-
-
-def _render_exports(row, parsed, comparacao, score):
-    st.markdown("### Exportacao")
-    report_text = make_report_text(row, parsed, comparacao, score)
-    txt_buffer = BytesIO(report_text.encode("utf-8"))
-    json_buffer = BytesIO(
-        json.dumps(
-            {
-                "analise": row,
-                "parsed": parsed,
-                "comparacao": comparacao,
-                "score": score,
-            },
-            ensure_ascii=False,
-            indent=2,
-        ).encode("utf-8")
-    )
+    final = llm_result.get("final", {})
+    st.markdown("**Resumo**")
+    st.write(final.get("summary", "N/A"))
 
     c1, c2 = st.columns(2)
     with c1:
-        st.download_button(
-            "Exportar relatorio (TXT)",
-            data=txt_buffer,
-            file_name="relatorio_curriculo.txt",
-            mime="text/plain",
-            use_container_width=True,
-        )
+        st.markdown("**Forças**")
+        st.write("\n".join(f"- {stringify_value(x)}" for x in final.get("strengths", [])) or "-")
     with c2:
-        st.download_button(
-            "Exportar dados (JSON)",
-            data=json_buffer,
-            file_name="relatorio_curriculo.json",
-            mime="application/json",
-            use_container_width=True,
-        )
+        st.markdown("**Fraquezas**")
+        st.write("\n".join(f"- {stringify_value(x)}" for x in final.get("weaknesses", [])) or "-")
+
+    st.markdown("**Reescritas por seção**")
+    render_rewrites(
+        final.get("section_rewrites", {}),
+        [("Estrutura", "estrutura"), ("Experiência", "experiencia"), ("Habilidades", "habilidades")],
+    )
 
 
 def render():
-    st.subheader("Relatorio Final")
-    st.caption("Painel analitico de diagnostico e otimizacao continua do curriculo.")
+    st.subheader("Relatório Final")
+    st.caption("Selecione usuário e currículo. As recomendações geradas ficam salvas.")
 
     rows = fetch_analises()
     if not rows:
-        st.info("Nenhuma analise registrada para exibir o relatorio final.")
+        st.info("Nenhuma análise registrada para exibir o relatório final.")
         return
 
     options = [{"id": r[0], "candidato": r[1], "area": r[2], "score": r[4], "date": r[5]} for r in rows]
-    default_index = 0
-    selected_id = st.session_state.get("selected_analysis")
-    if selected_id:
-        for i, opt in enumerate(options):
-            if opt["id"] == selected_id:
-                default_index = i
-                break
-
-    selected = st.selectbox(
-        "Selecione o curriculo para ver o historico final",
-        options,
-        index=default_index,
-        format_func=lambda o: f"#{o['id']} | {o['candidato']} | {o['area']} | {o['date']}",
+    candidatos = sorted({o["candidato"] for o in options})
+    candidato_sel = st.selectbox(
+        "Selecione o usuário (candidato)",
+        candidatos,
+        index=None,
+        placeholder="Escolha um usuário para visualizar os relatórios",
     )
+    if not candidato_sel:
+        st.info("Selecione um usuário para carregar os relatórios finais.")
+        return
+
+    user_options = [o for o in options if o["candidato"] == candidato_sel]
+    selected = st.selectbox(
+        "Selecione o currículo desse usuário",
+        user_options,
+        index=None,
+        placeholder="Escolha uma análise para abrir o relatório final",
+        format_func=lambda o: f"#{o['id']} | {o['area']} | {o['date']} | Score {o['score']}%",
+    )
+    if not selected:
+        st.info("Selecione uma análise para visualizar o relatório final.")
+        return
+
     analise_id = selected["id"]
     st.session_state["selected_analysis"] = analise_id
     row = fetch_analise_by_id(analise_id)
 
-    metrics = st.session_state.get("section_metrics", section_metrics())
-    score = st.session_state.get("final_score")
-    if score is None:
-        score = row[4] if row else score_from_metrics(metrics)
+    parsed_map = st.session_state.get("parsed_by_analysis", {})
+    metrics_map = st.session_state.get("metrics_by_analysis", {})
+    parsed = parsed_map.get(analise_id)
+    metrics = metrics_map.get(analise_id)
+    if parsed is None or metrics is None:
+        db_parsed, db_metrics = fetch_analise_artifacts(analise_id)
+        parsed = parsed if parsed is not None else db_parsed
+        metrics = metrics if metrics is not None else db_metrics
+        parsed_map[analise_id] = parsed
+        metrics_map[analise_id] = metrics
+        st.session_state["parsed_by_analysis"] = parsed_map
+        st.session_state["metrics_by_analysis"] = metrics_map
 
-    comparacao = st.session_state.get("comparacao", {})
-    semantic_fit = comparacao.get("semantic_fit")
-    area = row[2] if row else "Dados"
-    parsed = st.session_state.get("parsed", {})
+    parsed = parsed or {}
+    metrics = metrics or section_metrics(parsed)
+    st.session_state["parsed"] = parsed
+    st.session_state["section_metrics"] = metrics
+
+    score = row[4] if row else score_from_metrics(metrics)
+    semantic_fit = st.session_state.get(f"comparacao_{analise_id}", {}).get("semantic_fit")
 
     _render_score_panel(score, semantic_fit)
     _render_section_panel(metrics)
-    _render_context_lists(area)
-    _render_ai_block(area)
-    _render_version_compare(analise_id)
-    _render_exports(row, parsed, comparacao, score)
+    _render_ai_block(selected, metrics, parsed)

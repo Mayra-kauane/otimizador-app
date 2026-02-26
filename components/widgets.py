@@ -8,11 +8,15 @@ def status_badge(status: str) -> str:
         STATUS_EM_ANALISE: "#2563EB",
         STATUS_CONCLUIDA: "#16A34A",
         STATUS_REVISAO: "#F59E0B",
-        "Em analise": "#2563EB",
-        "Concluida": "#16A34A",
-        "Revisao": "#F59E0B",
+        "Em análise": "#2563EB",
+        "Concluída": "#16A34A",
+        "Revisão": "#F59E0B",
     }
-    label_map = {"Em analise": STATUS_EM_ANALISE, "Concluida": STATUS_CONCLUIDA, "Revisao": STATUS_REVISAO}
+    label_map = {
+        "Em análise": STATUS_EM_ANALISE,
+        "Concluída": STATUS_CONCLUIDA,
+        "Revisão": STATUS_REVISAO,
+    }
     display_status = label_map.get(status, status)
     color = palette.get(status, "#64748B")
     return (
@@ -62,7 +66,7 @@ def render_app_header(title: str):
         """,
         unsafe_allow_html=True,
     )
-    st.caption("Gerencie analises, acompanhe status e acesse relatorios.")
+    st.caption("Gerencie análises, acompanhe status e acesse relatórios.")
 
 
 def render_sidebar(current_key: str, page_options: list[tuple[str, str]]) -> str:
@@ -70,9 +74,9 @@ def render_sidebar(current_key: str, page_options: list[tuple[str, str]]) -> str
     key_by_label = {label: k for label, k in page_options}
     labels = [label for label, _ in page_options]
 
-    st.sidebar.markdown("### Navegacao")
+    st.sidebar.markdown("### Navegação")
     st.sidebar.markdown(
-        f"<div class='side-indicator'>Pagina atual: <b>{label_by_key[current_key]}</b></div>",
+        f"<div class='side-indicator'>Página atual: <b>{label_by_key[current_key]}</b></div>",
         unsafe_allow_html=True,
     )
 

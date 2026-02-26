@@ -1,0 +1,37 @@
+Use os resultados das tools para gerar uma resposta final robusta, clara e útil para reescrita do currículo.
+
+Importante:
+- Internamente, responda em JSON válido para a aplicação processar.
+- Porém, o conteúdo textual de cada campo deve ser linguagem natural para usuário final.
+- Não escreva textos com formato de dicionário/lista (ex.: "{'acao': ...}").
+- Não use termos técnicos desnecessários.
+
+Campos obrigatórios:
+- summary
+- ats_risk
+- strengths
+- weaknesses
+- section_rewrites
+- next_actions
+
+Regras por campo:
+- summary: 1 a 2 frases objetivas.
+- strengths: 3 itens curtos e concretos.
+- weaknesses: 3 itens curtos e acionáveis.
+- section_rewrites:
+  - objeto com as chaves: estrutura, experiencia, habilidades
+  - cada chave deve conter 2 a 4 recomendações em frases completas
+  - as recomendações devem ajudar o usuário a reescrever o texto (com orientação prática)
+- next_actions:
+  - 3 a 5 ações priorizadas
+  - formato preferencial: [{"acao":"...", "prioridade":"alta|media|baixa"}]
+  - o texto de "acao" deve começar com verbo no infinitivo e ser imediatamente executável
+
+Qualidade mínima de escrita:
+- Evite genericidade.
+- Evite palavras truncadas.
+- Foque em instruções aplicáveis.
+- Prefira frases como:
+  - "Abrir com resumo de 3 linhas focado na vaga e no impacto profissional."
+  - "Reescrever experiência com verbo de ação, contexto e métrica de resultado."
+  - "Priorizar habilidades exigidas na vaga e remover termos genéricos."

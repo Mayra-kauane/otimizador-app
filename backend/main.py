@@ -1,4 +1,4 @@
-﻿from __future__ import annotations
+from __future__ import annotations
 
 from typing import Any
 
@@ -6,6 +6,7 @@ from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 
+from agents.ollama_agent import OllamaConfig, run_resume_agent
 from core.constants import STATUS_CONCLUIDA, STATUS_EM_ANALISE
 from core.db import (
     delete_analise,
@@ -35,7 +36,21 @@ class ComparacaoRunRequest(BaseModel):
     salvar_resultado: bool = True
 
 
-app = FastAPI(title="Resume AI Backend", version="1.0.0")
+class LLMAnalyzeRequest(BaseModel):
+    candidato: str = Field(min_length=1)
+    area: str = Field(min_length=1)
+    resume_skills: list[str] = Field(default_factory=list)
+    section_metrics: dict[str, list] = Field(default_factory=dict)
+    vaga_titulo: str = Field(min_length=1)
+    vaga_descricao: str = Field(min_length=1)
+    model: str = "llama3.1:8b"
+    base_url: str = "http://localhost:11434"
+    temperature: float = 0.3
+    top_p: float = 0.9
+    num_predict: int = 700
+
+
+app = FastAPI(title="Resume AI Backend", version="1.1.0")
 
 app.add_middleware(
     CORSMiddleware,
@@ -63,33 +78,13 @@ def _resume_skills_from_area(area: str) -> list[str]:
     return ["Comunicacao", "Excel", "Analise"]
 
 
-def _semantic_mock(area: str) -> tuple[int, list[str], list[str]]:
-    area_l = (area or "").lower()
-    if "dado" in area_l:
-        return 78, [
-            "Falta aprofundar modelagem estatistica.",
-            "Baixa evidencia de cloud (AWS/Azure).",
-        ], [
-            "Adicionar projeto com ETL ponta a ponta.",
-            "Incluir experiencia com analise preditiva e metricas de negocio.",
-        ]
-    if "market" in area_l:
-        return 74, [
-            "Pouca evidencia de funil completo.",
-            "Ausencia de casos com ROI detalhado.",
-        ], [
-            "Destacar campanhas com CAC, LTV e ROI.",
-            "Relacionar resultados por canal e audiencia.",
-        ]
-    if "vend" in area_l:
-        return 76, [
-            "Nao explicita ticket medio e ciclo de venda.",
-            "Pouca evidencia de estrategia de account management.",
-        ], [
-            "Adicionar metas batidas por periodo.",
-            "Incluir exemplos de negociacao complexa B2B.",
-        ]
-    return 70, ["Faltam evidencias de impacto mensuravel."], ["Incluir resultados quantificados por secao."]
+def _risk_to_semantic_fit(ats_risk: str, compat: int) -> int:
+    risk_score = {
+        "baixo": 88,
+        "medio": 72,
+        "alto": 55,
+    }.get((ats_risk or "").lower(), 70)
+    return int((risk_score + compat) / 2)
 
 
 @app.get("/health")
@@ -160,7 +155,24 @@ def run_comparacao(payload: ComparacaoRunRequest) -> dict[str, Any]:
     area = analise[2]
     resume_skills = _resume_skills_from_area(area)
     kw_result = compare_with_job(payload.vaga_descricao, resume_skills)
-    semantic_fit, lacunas, recomendacoes = _semantic_mock(area)
+
+    try:
+        llm_result = run_resume_agent(
+            candidate_name=analise[1],
+            area=area,
+            resume_skills=resume_skills,
+            section_metrics=section_metrics(),
+            job_title=payload.vaga_titulo,
+            job_description=payload.vaga_descricao,
+            config=OllamaConfig(),
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Ollama indisponivel para comparacao: {exc}")
+
+    final = llm_result.get("final", {})
+    semantic_fit = _risk_to_semantic_fit(final.get("ats_risk", "medio"), kw_result["compat"])
+    lacunas = final.get("weaknesses", [])
+    recomendacoes = final.get("next_actions", [])
 
     metrics = section_metrics()
     base_score = score_from_metrics(metrics)
@@ -192,6 +204,30 @@ def run_comparacao(payload: ComparacaoRunRequest) -> dict[str, Any]:
         "recomendacoes": recomendacoes,
         "final_score": final_score,
     }
+
+
+@app.post("/llm/analyze")
+def llm_analyze(payload: LLMAnalyzeRequest) -> dict[str, Any]:
+    try:
+        config = OllamaConfig(
+            model=payload.model,
+            base_url=payload.base_url,
+            temperature=payload.temperature,
+            top_p=payload.top_p,
+            num_predict=payload.num_predict,
+        )
+        result = run_resume_agent(
+            candidate_name=payload.candidato,
+            area=payload.area,
+            resume_skills=payload.resume_skills,
+            section_metrics=payload.section_metrics,
+            job_title=payload.vaga_titulo,
+            job_description=payload.vaga_descricao,
+            config=config,
+        )
+        return result
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=str(exc))
 
 
 @app.get("/comparacoes/analise/{analise_id}")

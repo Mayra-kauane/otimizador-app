@@ -5,12 +5,12 @@ from core.db import fetch_analises
 
 
 def render():
-    st.subheader("Historico de Analises")
-    st.caption("Consulte todas as analises ja processadas.")
+    st.subheader("Histórico de Análises")
+    st.caption("Consulte todas as análises já processadas.")
 
     rows = fetch_analises()
     if not rows:
-        st.info("Nenhuma analise registrada.")
+        st.info("Nenhuma análise registrada.")
         return
 
     for analise_id, candidato, area, status, score, created_at in rows:
@@ -23,5 +23,5 @@ def render():
         with right:
             if st.button("Selecionar", key=f"hist_{analise_id}"):
                 st.session_state["selected_analysis"] = analise_id
-                st.success("Analise selecionada. Use o menu lateral para abrir Relatorio Final.")
+                st.success("Análise selecionada. Use o menu lateral para abrir Relatório Final.")
         st.divider()

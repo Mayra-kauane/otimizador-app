@@ -1,9 +1,14 @@
-import time
-
 import streamlit as st
 
+from agents.ollama_agent import OllamaConfig, run_resume_agent
+from components.llm_ui import render_rewrites
 from components.widgets import metric_card
-from core.db import fetch_analises
+from core.db import (
+    fetch_analise_ai_sections,
+    fetch_analise_artifacts,
+    fetch_analises,
+    update_analise_ai_section,
+)
 from core.logic import score_from_metrics, section_metrics
 
 
@@ -22,25 +27,6 @@ def _candidate_options():
     ]
 
 
-def _render_flow_steps():
-    st.markdown(
-        """
-        <div style="
-            border:1px solid #334155;
-            background:#0b1220;
-            border-radius:12px;
-            padding:10px 12px;
-            margin-bottom:12px;
-            color:#cbd5e1;
-            font-size:13px;
-        ">
-            Fluxo: <b>Upload</b> -> <b>Parsing</b> -> <b style="color:#93c5fd;">Analise</b> -> <b>Otimizacao</b>
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-
 def _render_context_header(selected: dict, consolidated_score: int):
     c1, c2, c3 = st.columns([2.2, 1.4, 1])
     with c1:
@@ -53,7 +39,7 @@ def _render_context_header(selected: dict, consolidated_score: int):
                 background:#111827;
                 margin-bottom:10px;
             ">
-                <div style="color:#93c5fd;font-size:12px;">Candidato em analise</div>
+                <div style="color:#93c5fd;font-size:12px;">Candidato em análise</div>
                 <div style="color:#f8fafc;font-size:20px;font-weight:700;">{selected['candidato']}</div>
             </div>
             """,
@@ -69,7 +55,7 @@ def _render_context_header(selected: dict, consolidated_score: int):
                 background:#111827;
                 margin-bottom:10px;
             ">
-                <div style="color:#93c5fd;font-size:12px;">Area de interesse</div>
+                <div style="color:#93c5fd;font-size:12px;">Área de interesse</div>
                 <div style="color:#f8fafc;font-size:18px;font-weight:700;">{selected['area']}</div>
             </div>
             """,
@@ -89,143 +75,169 @@ def _render_metrics_grid(items: list[tuple]):
                 metric_card(*items[i + 1])
 
 
-def _rewrite_mock(section_key: str, candidato: str, area: str):
-    prompts = {
-        "estrutura": "Ex.: reescrever resumo profissional para tom executivo e mais objetivo.",
-        "experiencia": "Ex.: transformar bullets fracos em bullets fortes com impacto.",
-        "habilidades": "Ex.: adaptar habilidades para vaga de analista de dados senior.",
-    }
-    outputs = {
-        "estrutura": [
-            "Resumo ajustado para tom mais profissional e direto.",
-            f"Abertura contextualizada para a area de {area}.",
-            "Ordem de informacoes otimizada para recrutador.",
-        ],
-        "experiencia": [
-            "Bullets reescritos com verbos de acao e resultado.",
-            "Resultados quantificados com metricas de impacto.",
-            "Experiencias mais aderentes a vaga priorizadas.",
-        ],
-        "habilidades": [
-            "Lista reescrita com foco nas habilidades da vaga.",
-            "Separacao clara entre hard e soft skills.",
-            "Termos tecnicos reforcados para leitura automatica.",
-        ],
-    }
-
-    st.markdown("**IA na Reescrita Inteligente (mock)**")
-    st.text_area(
-        "Objetivo da reescrita",
-        key=f"rw_obj_{section_key}",
-        placeholder=prompts[section_key],
+def _build_config() -> OllamaConfig:
+    return OllamaConfig(
+        model=st.session_state.get("ollama_model", "llama3.1:8b"),
+        base_url=st.session_state.get("ollama_base_url", "http://localhost:11434"),
+        temperature=float(st.session_state.get("ollama_temperature", 0.3)),
+        top_p=float(st.session_state.get("ollama_top_p", 0.9)),
+        num_predict=int(st.session_state.get("ollama_num_predict", 700)),
     )
 
-    if st.button("Reescrever secao", key=f"rw_btn_{section_key}", type="primary"):
-        with st.spinner("Gerando reescrita inteligente..."):
-            time.sleep(1.0)
-        st.session_state[f"rw_out_{section_key}"] = [
-            f"Reescrita sugerida para {candidato}:",
-            *outputs[section_key],
-        ]
 
-    result = st.session_state.get(f"rw_out_{section_key}")
-    if result:
-        st.info("\n".join(f"- {line}" for line in result))
-
-
-def _ats_mock(section_key: str, candidato: str):
-    outputs = {
-        "estrutura": [
-            "Ausencia de palavras-chave estrategicas detectada no resumo.",
-            "Estrutura reorganizada para melhor escaneabilidade ATS.",
-            "Titulos padronizados para leitura automatica.",
-        ],
-        "experiencia": [
-            "Descricao de experiencia alinhada com palavras-chave da vaga.",
-            "Bullets simplificados para maior escaneabilidade.",
-            "Linguagem ajustada para filtros automaticos.",
-        ],
-        "habilidades": [
-            "Palavras-chave tecnicas ausentes adicionadas.",
-            "Ordem das habilidades ajustada por aderencia a vaga.",
-            "Nomenclatura tecnica padronizada.",
-        ],
-    }
-
-    st.markdown("**IA para Ajuste ATS (mock)**")
-    st.text_area(
-        "Descricao da vaga (base ATS)",
-        key=f"ats_job_{section_key}",
-        placeholder="Cole uma descricao da vaga para simular a adaptacao ATS.",
+def _run_llm(selected: dict, job_description: str) -> dict:
+    parsed_map = st.session_state.get("parsed_by_analysis", {})
+    metrics_map = st.session_state.get("metrics_by_analysis", {})
+    parsed = parsed_map.get(selected["id"])
+    metrics = metrics_map.get(selected["id"])
+    if parsed is None or metrics is None:
+        db_parsed, db_metrics = fetch_analise_artifacts(selected["id"])
+        parsed = parsed if parsed is not None else db_parsed
+        metrics = metrics if metrics is not None else db_metrics
+        parsed_map[selected["id"]] = parsed
+        metrics_map[selected["id"]] = metrics
+        st.session_state["parsed_by_analysis"] = parsed_map
+        st.session_state["metrics_by_analysis"] = metrics_map
+    parsed = parsed or st.session_state.get("parsed", {})
+    skills = parsed.get("habilidades", [])
+    metrics = metrics or section_metrics(parsed)
+    return run_resume_agent(
+        candidate_name=selected["candidato"],
+        area=selected["area"],
+        resume_skills=skills,
+        section_metrics=metrics,
+        job_title="Vaga alvo",
+        job_description=job_description,
+        config=_build_config(),
     )
 
-    if st.button("Aplicar ajuste ATS", key=f"ats_btn_{section_key}", type="primary"):
-        with st.spinner("Aplicando ajustes ATS..."):
-            time.sleep(1.0)
-        st.session_state[f"ats_out_{section_key}"] = [
-            f"Ajustes ATS sugeridos para {candidato}:",
-            *outputs[section_key],
-        ]
 
-    result = st.session_state.get(f"ats_out_{section_key}")
-    if result:
-        st.success("\n".join(f"- {line}" for line in result))
-
-
-def _render_ai_block(section_key: str, candidato: str, area: str):
+def _render_ai_block(section_key: str, selected: dict):
     st.markdown("---")
-    st.markdown("### Otimizacao Inteligente (Simulacao de IA)")
-    st.caption(
-        "Quando integrada, a IA avaliara qualidade textual, reescrita contextual, adaptacao semantica a vaga e relatorios personalizados."
+    st.markdown("### Otimização Inteligente")
+    st.caption("Reescrita e recomendações geradas por LLM para esta seção.")
+
+    input_key = f"analysis_job_desc_{selected['id']}_{section_key}"
+    result_key = f"analysis_llm_result_{selected['id']}_{section_key}"
+
+    saved_sections = fetch_analise_ai_sections(selected["id"])
+    saved_section = saved_sections.get(section_key, {}) if isinstance(saved_sections, dict) else {}
+    saved_result = saved_section.get("result")
+    saved_job_desc = saved_section.get("job_description", "")
+
+    if saved_job_desc and input_key not in st.session_state:
+        st.session_state[input_key] = saved_job_desc
+    if saved_result and result_key not in st.session_state:
+        st.session_state[result_key] = saved_result
+
+    job_desc = st.text_area(
+        "Descrição da vaga para orientar a reescrita",
+        key=input_key,
+        placeholder="Cole aqui a descrição da vaga para gerar recomendações reais.",
     )
-    c1, c2 = st.columns(2)
-    with c1:
-        _rewrite_mock(section_key, candidato, area)
-    with c2:
-        _ats_mock(section_key, candidato)
+
+    if st.button("Gerar recomendações da seção", key=f"analysis_btn_{selected['id']}_{section_key}", type="primary"):
+        if not job_desc.strip():
+            st.warning("Cole a descrição da vaga para executar a IA.")
+        else:
+            try:
+                with st.spinner("Pensando..."):
+                    llm_result = _run_llm(selected, job_desc)
+                    st.session_state[result_key] = llm_result
+                    update_analise_ai_section(
+                        analise_id=selected["id"],
+                        section_key=section_key,
+                        llm_result=llm_result,
+                        job_description=job_desc,
+                    )
+            except Exception as exc:
+                st.error(f"Falha na execução com Ollama: {exc}")
+
+    result = st.session_state.get(result_key)
+    if not result:
+        return
+
+    final = result.get("final", {})
+    rewrites = final.get("section_rewrites", {})
+    section_label = {
+        "estrutura": "estrutura",
+        "experiencia": "experiencia",
+        "habilidades": "habilidades",
+    }[section_key]
+
+    st.markdown("**Resumo**")
+    st.write(final.get("summary", "N/A"))
+
+    st.markdown("**Reescrita sugerida para esta seção**")
+    render_rewrites(rewrites, [("Reescrita", section_label)])
+
+    updated_at = saved_section.get("updated_at")
+    if updated_at:
+        st.caption(f"Última recomendação salva em: {updated_at}")
 
 
 def render():
-    st.subheader("Analise por Secao")
-    st.caption("Avaliacao detalhada das secoes do curriculo com foco em clareza, impacto e aderencia.")
+    st.subheader("Análise por Seção")
+    st.caption("Avaliação detalhada das seções do currículo com foco em clareza, impacto e aderência.")
 
     options = _candidate_options()
     if not options:
-        st.info("Nenhuma analise encontrada para selecionar candidato.")
+        st.info("Nenhuma análise encontrada para selecionar candidato.")
         return
 
-    index = 0
-    selected_id = st.session_state.get("selected_analysis")
-    if selected_id:
-        for i, opt in enumerate(options):
-            if opt["id"] == selected_id:
-                index = i
-                break
+    search = st.text_input("Buscar currículo por nome (opcional)")
+    filtered_options = options
+    if search.strip():
+        term = search.strip().lower()
+        filtered_options = [opt for opt in options if term in opt["candidato"].lower()]
+
+    if not filtered_options:
+        st.warning("Nenhum currículo encontrado para esse filtro.")
+        return
 
     selected = st.selectbox(
         "Selecione o candidato para analisar",
-        options,
-        index=index,
+        filtered_options,
+        index=None,
+        placeholder="Escolha um currículo para iniciar a análise",
         format_func=lambda o: f"{o['candidato']} | {o['area']} | {o['created_at']}",
     )
-    st.session_state["selected_analysis"] = selected["id"]
 
-    metrics = st.session_state.get("section_metrics", section_metrics())
+    if not selected:
+        st.info("Selecione um currículo para visualizar as análises por seção.")
+        return
+
+    st.session_state["selected_analysis"] = selected["id"]
+    parsed_map = st.session_state.get("parsed_by_analysis", {})
+    metrics_map = st.session_state.get("metrics_by_analysis", {})
+    selected_parsed = parsed_map.get(selected["id"])
+    metrics = metrics_map.get(selected["id"])
+    if selected_parsed is None or metrics is None:
+        db_parsed, db_metrics = fetch_analise_artifacts(selected["id"])
+        selected_parsed = selected_parsed if selected_parsed is not None else db_parsed
+        metrics = metrics if metrics is not None else db_metrics
+        parsed_map[selected["id"]] = selected_parsed
+        metrics_map[selected["id"]] = metrics
+        st.session_state["parsed_by_analysis"] = parsed_map
+        st.session_state["metrics_by_analysis"] = metrics_map
+    selected_parsed = selected_parsed or {}
+    metrics = metrics or section_metrics(selected_parsed)
+    st.session_state["parsed"] = selected_parsed
+    st.session_state["section_metrics"] = metrics
     consolidated_score = score_from_metrics(metrics)
 
-    _render_flow_steps()
     _render_context_header(selected, consolidated_score)
 
-    tabs = st.tabs(["Estrutura", "Experiencia", "Habilidades"])
+    tabs = st.tabs(["Estrutura", "Experiência", "Habilidades"])
 
     with tabs[0]:
         _render_metrics_grid(metrics["estrutura"])
-        _render_ai_block("estrutura", selected["candidato"], selected["area"])
+        _render_ai_block("estrutura", selected)
 
     with tabs[1]:
         _render_metrics_grid(metrics["experiencia"])
-        _render_ai_block("experiencia", selected["candidato"], selected["area"])
+        _render_ai_block("experiencia", selected)
 
     with tabs[2]:
         _render_metrics_grid(metrics["habilidades"])
-        _render_ai_block("habilidades", selected["candidato"], selected["area"])
+        _render_ai_block("habilidades", selected)
