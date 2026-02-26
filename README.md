@@ -1,5 +1,3 @@
-﻿# Resume AI - Avaliação Final (IA Generativa)
-
 Aplicação de análise e otimização de currículos com IA generativa integrada via Ollama.
 
 ## 1. Problema e solução
